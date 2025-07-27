@@ -1,0 +1,43 @@
+name: Inject Veille LLM Results in Profile
+
+on:
+  schedule:
+    - cron: "0 7 * * 0"  # chaque dimanche à 7h UTC
+  workflow_dispatch:
+
+jobs:
+  update-profile-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout profile repo
+        uses: actions/checkout@v4
+
+      - name: Checkout veille-llm repo
+        uses: actions/checkout@v4
+        with:
+          repository: IA990/veille-llm
+          path: veille-llm
+
+      - name: Générer la section veille LLM
+        run: |
+          echo "### Dernières fiches LLM" > veille_section.md
+          echo "" >> veille_section.md
+          ls -t veille-llm/data/llm_catalog/*.md | head -5 | while read fic; do
+            echo "#### $(basename "$fic" .md)" >> veille_section.md
+            echo "" >> veille_section.md
+            head -15 "$fic" >> veille_section.md
+            echo "" >> veille_section.md
+          done
+
+      - name: Injecter la section dans README.md
+        run: |
+          awk '/<!-- VEILLE_LLM_START -->/{flag=1;print;system("cat veille_section.md");next}/<!-- VEILLE_LLM_END -->/{flag=0}flag==0' README.md > README.tmp
+          mv README.tmp README.md
+
+      - name: Commit & Push si modifié
+        run: |
+          git config --global user.name "llm-bot"
+          git config --global user.email "llm-bot@example.com"
+          git add README.md
+          git commit -m "Mise à jour auto: section veille LLM" || echo "Pas de changement"
+          git push
